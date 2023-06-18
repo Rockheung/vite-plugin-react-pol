@@ -43,9 +43,7 @@ export default defineConfig(async ({ mode }) => {
                     return responseBuffer;
                   }
 
-                  // application/json Content-Type이 서버에서 제대로 설정되지 않아 직접 바이패스
-                  // .cm 경로는 대개 실제 php가 실행되는 파일임.
-                  if (/.*\.cm\??/.test(req.url)) {
+                  if (new RegExp(env.VITE_PROXY_IGNORE_PATHS).test(req.url)) {
                     return responseBuffer;
                   }
 
@@ -53,14 +51,24 @@ export default defineConfig(async ({ mode }) => {
                     url: options.target as string,
                     referrer: options.target as string,
                   });
-                  const targetNode = document.querySelector(env.VITE_APP_INJECT_SELECTOR || 'body');
 
-                  if (targetNode === null) {
-                    console.warn('You should set VITE_APP_INJECT_SELECTOR to inject vite script');
-                    console.warn('If this message shows multiple times, server\'s response might be malformed content-type header');
-                  } else {
+                  const rootNode = document.getElementById(env.VITE_CONTAINER_ID || 'root');
+
+                  if (typeof env.VITE_CONTAINER_ID === "undefined" || rootNode === null) {
+                    console.warn('You should set VITE_APP_INJECT_SELECTOR to inject vite script in .env');
+                    console.warn('If this message shows multiple times, server\'s response might be malformed.');
+                    console.warn('This plugin does not support html ajax response.')
+                    console.warn('You have to manually ignore ajax path next with VITE_PROXY_IGNORE_PATHS env variable.')
+                    console.warn('- ' + req.url);
+
+
+                    const targetNode = document.querySelector(env.VITE_APP_INJECT_SELECTOR || 'body > *:first-child')
+                    if (targetNode === null) {
+                      console.log("This request does not seem to be html request.");
+                      return responseBuffer;
+                    }
                     const appRoot = document.createElement('div');
-                    appRoot.id = env.VITE_APP_ROOT_ID || 'root';
+                    appRoot.id = env.VITE_CONTAINER_ID || 'root';
                     targetNode.parentElement.insertBefore(appRoot, targetNode.nextSibling);
                   }
 
@@ -70,16 +78,16 @@ export default defineConfig(async ({ mode }) => {
                   return '<!DOCTYPE html>\n' + document.documentElement.outerHTML.replace(
                     "</body>",
                     `<script>console.warn('${warnMsg}')</script>
-                <script type="module">  
-                  import RefreshRuntime from 'https://localhost:5173/@react-refresh'
-                  RefreshRuntime.injectIntoGlobalHook(window)
-                  window.$RefreshReg$ = () => {}
-                  window.$RefreshSig$ = () => (type) => type
-                  window.__vite_plugin_react_preamble_installed__ = true
-                </script>
-                <script type="module" src="https://localhost:5173/@vite/client"></script>
-                <script type="module" src="https://localhost:5173/src/main.tsx"></script>
-                </body>`
+  <script type="module">  
+    import RefreshRuntime from 'https://localhost:5173/@react-refresh'
+    RefreshRuntime.injectIntoGlobalHook(window)
+    window.$RefreshReg$ = () => {}
+    window.$RefreshSig$ = () => (type) => type
+    window.__vite_plugin_react_preamble_installed__ = true
+  </script>
+  <script type="module" src="https://localhost:5173/@vite/client"></script>
+  <script type="module" src="https://localhost:5173/src/main.tsx"></script>
+</body>`
                   );
                 }
               )
@@ -89,7 +97,6 @@ export default defineConfig(async ({ mode }) => {
       },
     },
     build: {
-      // outDir에서 manifest.json을 생성합니다.
       manifest: true,
       rollupOptions: {
         input: 'src/main.tsc'
