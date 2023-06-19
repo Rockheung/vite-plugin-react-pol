@@ -41,13 +41,10 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
               selfHandleResponse: true,
               configure: (proxy, options) => {
                 proxy.on("proxyReq", (proxyReq, req, res) => {
-
                   try {
-                    new URL(req.headers.referer)
-
                     proxyReq.setHeader("referer", options.target + new URL(req.headers.referer).pathname);
                   } catch (error) {
-                    console.log(error)
+                    proxyReq.setHeader("referer", options.target + '/');
                   }
                 });
                 proxy.on(
@@ -160,13 +157,12 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
 // https://vitejs.dev/config/
 export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, process.cwd());
-  console.log("🚀 ~ file: vite.config.ts:157 ~ defineConfig ~ env:", env)
   return {
     plugins: [
       react(),
       livePageProxy({
         livePageOrigin: env.VITE_TARGET_ORIGIN,
-        // appContainerId: env.VITE_APP_CONTAINER_ID,
+        appContainerId: env.VITE_APP_CONTAINER_ID,
         ignorePathRegex: env.VITE_PROXY_IGNORE_PATHS,
         mountNextTo: env.VITE_APP_INJECT_SELECTOR,
         https: {
