@@ -4,7 +4,18 @@ import react from "@vitejs/plugin-react";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
 
-const livePageProxy = async () => {
+interface LivePageProxyOptions {
+  livePageOrigin: string;
+  appContainerId?: string;
+  mountNextTo?: string;
+  https?: UserConfig["server"]["https"];
+  ignorePathRegex?: string;
+}
+
+const DEFAULT_ROOT_ID = "root";
+const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
+
+const livePageProxy = async (userOptions: LivePageProxyOptions) => {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
@@ -16,17 +27,13 @@ const livePageProxy = async () => {
     .join("");
   return {
     name: "live-page-proxy",
-    config: async ({ build }, { mode }) => {
-      const env = loadEnv(mode, process.cwd());
+    config: async ({ build }) => {
       return {
         server: {
-          https: {
-            key: await fs.readFile("./certs/localhost-key.pem"),
-            cert: await fs.readFile("./certs/localhost.pem"),
-          },
+          https: userOptions.https,
           proxy: {
             [`^${ignoreProxyPaths}.*`]: {
-              target: env.VITE_TARGET_HOST,
+              target: userOptions.livePageOrigin,
               changeOrigin: true,
               cookieDomainRewrite: {
                 "*": "",
@@ -34,7 +41,14 @@ const livePageProxy = async () => {
               selfHandleResponse: true,
               configure: (proxy, options) => {
                 proxy.on("proxyReq", (proxyReq, req, res) => {
-                  proxyReq.setHeader("referer", options.target + "/");
+
+                  try {
+                    new URL(req.headers.referer)
+
+                    proxyReq.setHeader("referer", options.target + new URL(req.headers.referer).pathname);
+                  } catch (error) {
+                    console.log(error)
+                  }
                 });
                 proxy.on(
                   "proxyRes",
@@ -47,13 +61,12 @@ const livePageProxy = async () => {
                       }
 
                       if (
-                        new RegExp(env.VITE_PROXY_IGNORE_PATHS).test(req.url)
+                        new RegExp(userOptions.ignorePathRegex).test(req.url)
                       ) {
                         return responseBuffer;
                       }
 
                       const {
-                        window,
                         window: { document },
                       } = new JSDOM(responseBuffer, {
                         url: options.target as string,
@@ -61,15 +74,15 @@ const livePageProxy = async () => {
                       });
 
                       const rootNode = document.getElementById(
-                        env.VITE_CONTAINER_ID || "root"
+                        userOptions.appContainerId || DEFAULT_ROOT_ID
                       );
 
                       if (
-                        typeof env.VITE_CONTAINER_ID === "undefined" ||
+                        typeof userOptions.appContainerId === "undefined" ||
                         rootNode === null
                       ) {
                         console.warn(
-                          "You should set VITE_APP_INJECT_SELECTOR to inject vite script in .env"
+                          "You should set `appContainerId` option to inject React app or default is " + DEFAULT_ROOT_ID
                         );
                         console.warn(
                           "If this message shows multiple times, server's response might be malformed."
@@ -78,12 +91,12 @@ const livePageProxy = async () => {
                           "This plugin does not support html ajax response."
                         );
                         console.warn(
-                          "You have to manually ignore ajax path next with VITE_PROXY_IGNORE_PATHS env variable."
+                          "You may need to manually ignore next ajax path with ignorePathRegex option."
                         );
                         console.warn("- " + req.url);
 
                         const targetNode = document.querySelector(
-                          env.VITE_APP_INJECT_SELECTOR || "body > *:first-child"
+                          userOptions.mountNextTo || "body > *:first-child"
                         );
                         if (targetNode === null) {
                           console.log(
@@ -92,7 +105,7 @@ const livePageProxy = async () => {
                           return responseBuffer;
                         }
                         const appRoot = document.createElement("div");
-                        appRoot.id = env.VITE_CONTAINER_ID || "root";
+                        appRoot.id = userOptions.appContainerId || DEFAULT_ROOT_ID;
                         targetNode.parentElement.insertBefore(
                           appRoot,
                           targetNode.nextSibling
@@ -117,15 +130,15 @@ const livePageProxy = async () => {
   <script type="module" src="https://localhost:5173/@vite/client"></script>
   <script type="module">
     const container = document.getElementById('${
-      env.VITE_CONTAINER_ID || "root"
+      userOptions.appContainerId || DEFAULT_ROOT_ID
     }');
     if (container instanceof HTMLElement) {
-      import("https://localhost:5173/${
-        build.rollupOptions.input
+      import("/${
+        build.rollupOptions.input || DEFAULT_MAIN_APP_SRC
       }").catch(console.error);
     } else {
       console.error('Container element not found: ', '${
-        env.VITE_CONTAINER_ID || "root"
+        userOptions.appContainerId || DEFAULT_ROOT_ID
       }');
     }
   </script>
@@ -145,9 +158,23 @@ const livePageProxy = async () => {
 };
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode }) => {
+  const env = loadEnv(mode, process.cwd());
+  console.log("🚀 ~ file: vite.config.ts:157 ~ defineConfig ~ env:", env)
   return {
-    plugins: [react(), livePageProxy()],
+    plugins: [
+      react(),
+      livePageProxy({
+        livePageOrigin: env.VITE_TARGET_ORIGIN,
+        // appContainerId: env.VITE_APP_CONTAINER_ID,
+        ignorePathRegex: env.VITE_PROXY_IGNORE_PATHS,
+        mountNextTo: env.VITE_APP_INJECT_SELECTOR,
+        https: {
+          key: await fs.readFile("./certs/localhost-key.pem"),
+          cert: await fs.readFile("./certs/localhost.pem"),
+        },
+      }),
+    ],
     build: {
       manifest: true,
       rollupOptions: {
