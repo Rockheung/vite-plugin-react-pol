@@ -86,7 +86,14 @@ export default defineConfig(async ({ mode }) => {
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
   <script type="module" src="https://localhost:5173/@vite/client"></script>
-  <script type="module" src="https://localhost:5173/src/main.tsx"></script>
+  <script type="module">
+    const container = document.getElementById('${env.VITE_CONTAINER_ID || 'root'}');
+    if (container instanceof HTMLElement) {
+      import("https://localhost:5173/src/main.tsx").catch(console.error);
+    } else {
+      console.error('Container element not found: ', '${env.VITE_CONTAINER_ID || 'root'}');
+    }
+  </script>
 </body>`
                   );
                 }
