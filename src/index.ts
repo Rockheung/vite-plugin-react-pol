@@ -1,4 +1,4 @@
-import { PluginOption, CommonServerOptions } from "vite";
+import { Plugin } from "vite";
 import fs from "node:fs/promises";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
@@ -14,7 +14,7 @@ const DEFAULT_ROOT_ID = "root";
 const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
 
 
-async function reactPageOnLive(userOptions: ReactIslandOptions) {
+async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin> {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
