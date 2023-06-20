@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
 
-interface ReactIslandOptions {
+interface ReactPageOnLiveOptions {
   livePageOrigin: string;
   appContainerId?: string;
   mountNextTo?: string;
@@ -14,7 +14,7 @@ const DEFAULT_ROOT_ID = "root";
 const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
 
 
-async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin> {
+async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plugin> {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
