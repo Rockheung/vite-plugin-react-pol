@@ -28,7 +28,7 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin>
     // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
     name: "live-page-proxy",
-    config: async ({ build }) => {
+    config: async ({ build, server }) => {
       return {
         server: {
           proxy: {
@@ -42,8 +42,8 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin>
               configure: (proxy, options) => {
                 proxy.on("proxyReq", (proxyReq, req) => {
                   if (typeof req.headers.referer === 'undefined') return;
-                  // cannot determine the referer of current document only with incoming message
-                  proxyReq.setHeader("referer", options.target + '/');
+                  const refererPathname = new URL(req.headers.referer || options.target as string).pathname;
+                  proxyReq.setHeader("referer", options.target + refererPathname);
                 });
                 proxy.on(
                   "proxyRes",
@@ -64,6 +64,8 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin>
                       ) {
                         return responseBuffer
                       }
+
+                      const scheme = server?.https ? "https" : "http";
 
                       const {
                         window: { document },
@@ -110,6 +112,7 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin>
                           targetNode.nextSibling
                         );
                       }
+                      
 
                       const warnMsg =
                         "==================== vite script injected ====================";
@@ -120,13 +123,13 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<Plugin>
                           "</body>",
                           `<script>console.warn('${warnMsg}')</script>
   <script type="module">  
-    import RefreshRuntime from 'https://localhost:5173/@react-refresh'
+    import RefreshRuntime from '${scheme}://localhost:5173/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
     window.$RefreshReg$ = () => {}
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="https://localhost:5173/@vite/client"></script>
+  <script type="module" src="${scheme}://localhost:5173/@vite/client"></script>
   <script type="module">
     const container = document.getElementById('${
       userOptions.appContainerId || DEFAULT_ROOT_ID
