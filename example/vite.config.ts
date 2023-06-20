@@ -7,7 +7,8 @@ export default defineConfig({
   plugins: [
     react(),
     reactPageOnLive({
-      livePageOrigin: 'https://bluemoon100.imtest.me'
+      livePageOrigin: 'https://imtest.me',
+      ignorePathRegex: ".*\\.cm\\??"
     }),
   ],
 });

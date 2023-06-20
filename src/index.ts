@@ -72,6 +72,7 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                       } = new JSDOM(responseBuffer, {
                         url: options.target as string,
                         referrer: options.target as string,
+                        contentType: "text/html; charset=utf-8" as any
                       });
 
                       const rootNode = document.getElementById(
@@ -113,7 +114,6 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                         );
                       }
                       
-
                       const warnMsg =
                         "==================== vite script injected ====================";
 
