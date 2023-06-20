@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-react-pol",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": {
     "name": "Rockheung",
     "email": "rockheung@gmail.com"
@@ -30,7 +30,8 @@
   "devDependencies": {
     "tsx": "^3.12.7",
     "typescript": "^5.0.2",
-    "unbuild": "^1.2.1"
+    "unbuild": "^1.2.1",
+    "vite-plugin-react-pol": "^0.0.3"
   },
   "dependencies": {
     "@types/express": "^4.17.17",
