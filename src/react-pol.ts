@@ -1,21 +1,21 @@
-import { UserConfig, defineConfig, loadEnv } from "vite";
+import { PluginOption, CommonServerOptions } from "vite";
 import fs from "node:fs/promises";
-import react from "@vitejs/plugin-react";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
 
-interface LivePageProxyOptions {
+interface ReactIslandOptions {
   livePageOrigin: string;
   appContainerId?: string;
   mountNextTo?: string;
-  https?: UserConfig["server"]["https"];
+  https?: CommonServerOptions["https"];
   ignorePathRegex?: string;
 }
 
 const DEFAULT_ROOT_ID = "root";
 const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
 
-const livePageProxy = async (userOptions: LivePageProxyOptions) => {
+
+async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<PluginOption> {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
@@ -40,27 +40,29 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
               },
               selfHandleResponse: true,
               configure: (proxy, options) => {
-                proxy.on("proxyReq", (proxyReq, req, res) => {
-                  try {
-                    proxyReq.setHeader("referer", options.target + new URL(req.headers.referer).pathname);
-                  } catch (error) {
-                    proxyReq.setHeader("referer", options.target + '/');
-                  }
+                proxy.on("proxyReq", (proxyReq, req) => {
+                  if (typeof req.headers.referer === 'undefined') return;
+                  // cannot determine the referer of current document only with incoming message
+                  proxyReq.setHeader("referer", options.target + '/');
                 });
                 proxy.on(
                   "proxyRes",
                   responseInterceptor(
-                    async (responseBuffer, proxyRes, req, res) => {
+                    async (responseBuffer, proxyRes, req) => {
                       if (
-                        !/^text\/html/.test(proxyRes.headers["content-type"])
+                        typeof proxyRes.headers['content-type'] !==
+                          'undefined' &&
+                        !/^text\/html/.test(proxyRes.headers['content-type'])
                       ) {
-                        return responseBuffer;
+                        return responseBuffer
                       }
 
                       if (
+                        typeof userOptions.ignorePathRegex !== 'undefined' &&
+                        typeof req.url === 'string' &&
                         new RegExp(userOptions.ignorePathRegex).test(req.url)
                       ) {
-                        return responseBuffer;
+                        return responseBuffer
                       }
 
                       const {
@@ -103,7 +105,7 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
                         }
                         const appRoot = document.createElement("div");
                         appRoot.id = userOptions.appContainerId || DEFAULT_ROOT_ID;
-                        targetNode.parentElement.insertBefore(
+                        targetNode.parentElement!.insertBefore(
                           appRoot,
                           targetNode.nextSibling
                         );
@@ -131,7 +133,7 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
     }');
     if (container instanceof HTMLElement) {
       import("/${
-        build.rollupOptions.input || DEFAULT_MAIN_APP_SRC
+        build?.rollupOptions?.input || DEFAULT_MAIN_APP_SRC
       }").catch(console.error);
     } else {
       console.error('Container element not found: ', '${
@@ -154,28 +156,4 @@ const livePageProxy = async (userOptions: LivePageProxyOptions) => {
   };
 };
 
-// https://vitejs.dev/config/
-export default defineConfig(async ({ mode }) => {
-  const env = loadEnv(mode, process.cwd());
-  return {
-    plugins: [
-      react(),
-      livePageProxy({
-        livePageOrigin: env.VITE_TARGET_ORIGIN,
-        appContainerId: env.VITE_APP_CONTAINER_ID,
-        ignorePathRegex: env.VITE_PROXY_IGNORE_PATHS,
-        mountNextTo: env.VITE_APP_INJECT_SELECTOR,
-        https: {
-          key: await fs.readFile("./certs/localhost-key.pem"),
-          cert: await fs.readFile("./certs/localhost.pem"),
-        },
-      }),
-    ],
-    build: {
-      manifest: true,
-      rollupOptions: {
-        input: "src/main.tsx",
-      },
-    },
-  };
-});
+export default reactPageOnLive;
