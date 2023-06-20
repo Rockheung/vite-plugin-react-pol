@@ -7,7 +7,6 @@ interface ReactIslandOptions {
   livePageOrigin: string;
   appContainerId?: string;
   mountNextTo?: string;
-  https?: CommonServerOptions["https"];
   ignorePathRegex?: string;
 }
 
@@ -15,7 +14,7 @@ const DEFAULT_ROOT_ID = "root";
 const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
 
 
-async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<PluginOption> {
+async function reactPageOnLive(userOptions: ReactIslandOptions) {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
@@ -25,12 +24,13 @@ async function reactPageOnLive(userOptions: ReactIslandOptions): Promise<PluginO
   ]
     .map((fileName) => `(?!/${fileName})`)
     .join("");
+
+    // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
     name: "live-page-proxy",
     config: async ({ build }) => {
       return {
         server: {
-          https: userOptions.https,
           proxy: {
             [`^${ignoreProxyPaths}.*`]: {
               target: userOptions.livePageOrigin,
