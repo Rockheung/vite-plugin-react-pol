@@ -6,8 +6,11 @@ import { JSDOM } from "jsdom";
 interface ReactPageOnLiveOptions {
   livePageOrigin: string;
   appContainerId?: string;
+  mainAppSrc?: string;
   mountNextTo?: string;
   ignorePathRegex?: string;
+  viteDevServerHost?: string;
+  viteDevServerPort?: number;
 }
 
 const DEFAULT_ROOT_ID = "root";
@@ -116,6 +119,14 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                       
                       const warnMsg =
                         "==================== vite script injected ====================";
+                      const devServerHost =
+                        userOptions.viteDevServerHost ||
+                        // based on vite server option
+                        server?.host === true
+                          ? "0.0.0.0"
+                          : server?.host || "localhost";
+                      const devServerPort =
+                        userOptions.viteDevServerPort || server?.port || 5173;
 
                       return (
                         "<!DOCTYPE html>\n" +
@@ -123,20 +134,20 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                           "</body>",
                           `<script>console.warn('${warnMsg}')</script>
   <script type="module">  
-    import RefreshRuntime from '${scheme}://localhost:5173/@react-refresh'
+    import RefreshRuntime from '${scheme}://${devServerHost}:${devServerPort}/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
     window.$RefreshReg$ = () => {}
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="${scheme}://localhost:5173/@vite/client"></script>
+  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>
   <script type="module">
     const container = document.getElementById('${
       userOptions.appContainerId || DEFAULT_ROOT_ID
     }');
     if (container instanceof HTMLElement) {
       import("/${
-        build?.rollupOptions?.input || DEFAULT_MAIN_APP_SRC
+        build?.rollupOptions?.input || userOptions.mainAppSrc || DEFAULT_MAIN_APP_SRC
       }").catch(console.error);
     } else {
       console.error('Container element not found: ', '${
