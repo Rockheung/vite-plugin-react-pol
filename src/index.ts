@@ -11,6 +11,7 @@ interface ReactPageOnLiveOptions {
   ignorePathRegex?: string;
   viteDevServerHost?: string;
   viteDevServerPort?: number;
+  forceMount?: boolean;
 }
 
 const DEFAULT_ROOT_ID = "root";
@@ -78,16 +79,18 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                         contentType: "text/html; charset=utf-8" as any
                       });
 
-                      const rootNode = document.getElementById(
+                      const appRootNode = document.getElementById(
                         userOptions.appContainerId || DEFAULT_ROOT_ID
                       );
 
                       if (
-                        typeof userOptions.appContainerId === "undefined" ||
-                        rootNode === null
+                        (typeof userOptions.appContainerId === "undefined" ||
+                          appRootNode === null) &&
+                        userOptions.forceMount === true
                       ) {
                         console.warn(
-                          "You should set `appContainerId` option to inject React app or default is " + DEFAULT_ROOT_ID
+                          "You should set `appContainerId` option to inject React app or default is " +
+                            DEFAULT_ROOT_ID
                         );
                         console.warn(
                           "If this message shows multiple times, server's response might be malformed."
@@ -110,7 +113,8 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                           return responseBuffer;
                         }
                         const appRoot = document.createElement("div");
-                        appRoot.id = userOptions.appContainerId || DEFAULT_ROOT_ID;
+                        appRoot.id =
+                          userOptions.appContainerId || DEFAULT_ROOT_ID;
                         targetNode.parentElement!.insertBefore(
                           appRoot,
                           targetNode.nextSibling
