@@ -8,7 +8,8 @@ export default defineConfig({
     react(),
     reactPageOnLive({
       livePageOrigin: 'https://imtest.me',
-      ignorePathRegex: ".*\\.cm\\??"
+      ignorePathRegex: ".*\\.cm\\??",
+      removeTargetSelectors: 'body'
     }),
   ],
 });

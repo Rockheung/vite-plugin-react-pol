@@ -4,14 +4,24 @@ import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
 
 interface ReactPageOnLiveOptions {
+  // Target page to inject React app
   livePageOrigin: string;
+  // Target element id to inject React app
   appContainerId?: string;
+  // Path to main app source
   mainAppSrc?: string;
+  // Path to mount React app
   mountNextTo?: string;
+  // Regex to ignore request path
   ignorePathRegex?: string;
+  // Vite dev server host
   viteDevServerHost?: string;
+  // Vite dev server port
   viteDevServerPort?: number;
+  // Force mount React app even if appContainerId is not found
   forceMount?: boolean;
+  // CSS selector to ignore
+  removeTargetSelectors?: string;
 }
 
 const DEFAULT_ROOT_ID = "root";
@@ -31,7 +41,7 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
 
     // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
-    name: "live-page-proxy",
+    name: "live-page-on-live",
     config: async ({ build, server }) => {
       return {
         server: {
@@ -78,6 +88,19 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                         referrer: options.target as string,
                         contentType: "text/html; charset=utf-8" as any
                       });
+
+                      const targetNodes =
+                        typeof userOptions.removeTargetSelectors === "string"
+                          ? document.querySelectorAll(
+                              userOptions.removeTargetSelectors
+                            )
+                          : [];
+
+                      for (const dom of targetNodes) {
+                        if (dom) {
+                          dom.remove();
+                        }
+                      }
 
                       const appRootNode = document.getElementById(
                         userOptions.appContainerId || DEFAULT_ROOT_ID
