@@ -22,6 +22,8 @@ interface ReactPageOnLiveOptions {
   forceMount?: boolean;
   // CSS selector to ignore
   removeTargetSelectors?: string;
+  // Override header
+  overrideHeaders?: Record<string, string>;
 }
 
 const DEFAULT_ROOT_ID = "root";
@@ -58,6 +60,11 @@ async function reactPageOnLive(userOptions: ReactPageOnLiveOptions): Promise<Plu
                   if (typeof req.headers.referer === 'undefined') return;
                   const refererPathname = new URL(req.headers.referer || options.target as string).pathname;
                   proxyReq.setHeader("referer", options.target + refererPathname);
+                  if (typeof userOptions.overrideHeaders !== 'undefined') {
+                    for (const [key, value] of Object.entries(userOptions.overrideHeaders)) {
+                      proxyReq.setHeader(key, value);
+                    }
+                  }
                 });
                 proxy.on(
                   "proxyRes",
