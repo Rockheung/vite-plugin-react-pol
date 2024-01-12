@@ -37,6 +37,7 @@ async function reactPageOnLive(
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite/client", // HMR stuff
     "@react-refresh",
+    "@fs",
     "src",
     ...(await fs.readdir("./public")),
   ]
