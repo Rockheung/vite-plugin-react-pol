@@ -10,6 +10,8 @@ interface ReactPageOnLiveOptions {
   // Target element id to inject React app
   appContainerId?: string;
   // Path to main app source
+  appContainerIds?: string[];
+  // Path to main app source
   mainAppSrc?: string;
   // Path to mount React app
   mountNextTo?: string;
@@ -28,22 +30,22 @@ interface ReactPageOnLiveOptions {
 }
 
 const DEFAULT_ROOT_ID = "root";
-const DEFAULT_MAIN_APP_SRC = "src/main.tsx";
 
 async function reactPageOnLive(
   userOptions: ReactPageOnLiveOptions
 ): Promise<Plugin> {
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
-    "@vite/client", // HMR stuff
+    "@vite", // HMR stuff
     "@react-refresh",
     "@fs",
     "src",
+    "main.js",
     ...(await fs.readdir("./public")),
   ]
     .map((fileName) => `(?!/${fileName})`)
     .join("");
-const rewriteReferer = (
+  const rewriteReferer = (
     proxyReq: http.ClientRequest,
     req: http.IncomingMessage
   ) => {
@@ -62,7 +64,9 @@ const rewriteReferer = (
 
   const overrideHeaders = (proxyReq: http.ClientRequest) => {
     if (typeof userOptions.headersOverridden !== "undefined") {
-      for (const [key, value] of Object.entries(userOptions.headersOverridden)) {
+      for (const [key, value] of Object.entries(
+        userOptions.headersOverridden
+      )) {
         proxyReq.setHeader(key, value);
       }
     }
@@ -135,47 +139,52 @@ const rewriteReferer = (
                       }
                     }
 
-                    const appRootNode = document.getElementById(
-                      userOptions.appContainerId || DEFAULT_ROOT_ID
-                    );
+                    [
+                      userOptions.appContainerId,
+                      ...(userOptions.appContainerIds ?? []),
+                    ].forEach((appId) => {
+                      const appRootNode = document.getElementById(
+                        appId || DEFAULT_ROOT_ID
+                      );
 
-                    if (
-                      (typeof userOptions.appContainerId === "undefined" ||
-                        appRootNode === null) &&
-                      userOptions.forceMount === true
-                    ) {
-                      console.warn(
-                        "You should set `appContainerId` option to inject React app or default is " +
-                          DEFAULT_ROOT_ID
-                      );
-                      console.warn(
-                        "If this message shows multiple times, server's response might be malformed."
-                      );
-                      console.warn(
-                        "This plugin does not support html ajax response."
-                      );
-                      console.warn(
-                        "You may need to manually ignore next ajax path with ignorePathRegex option."
-                      );
-                      console.warn("- " + req.url);
-
-                      const targetNode = document.querySelector(
-                        userOptions.mountNextTo || "body > *:first-child"
-                      );
-                      if (targetNode === null) {
-                        console.log(
-                          "This request does not seem to be html request."
+                      if (
+                        (typeof appId === "undefined" ||
+                          appRootNode === null) &&
+                        userOptions.forceMount === true
+                      ) {
+                        console.warn(
+                          "You should set `appContainerId` option to inject React app or default is " +
+                            DEFAULT_ROOT_ID
                         );
-                        return responseBuffer;
+                        console.warn(
+                          "If this message shows multiple times, server's response might be malformed."
+                        );
+                        console.warn(
+                          "This plugin does not support html ajax response."
+                        );
+                        console.warn(
+                          "You may need to manually ignore next ajax path with ignorePathRegex option."
+                        );
+                        console.warn("- " + req.url);
+
+                        const targetNode = document.querySelector(
+                          userOptions.mountNextTo || "body > *:first-child"
+                        );
+                        if (targetNode === null) {
+                          console.log(
+                            "This request does not seem to be html request."
+                          );
+                          return responseBuffer;
+                        }
+                        const appRoot = document.createElement("div");
+                        appRoot.id =
+                        appId || DEFAULT_ROOT_ID;
+                        targetNode.parentElement!.insertBefore(
+                          appRoot,
+                          targetNode.nextSibling
+                        );
                       }
-                      const appRoot = document.createElement("div");
-                      appRoot.id =
-                        userOptions.appContainerId || DEFAULT_ROOT_ID;
-                      targetNode.parentElement!.insertBefore(
-                        appRoot,
-                        targetNode.nextSibling
-                      );
-                    }
+                    });
 
                     const warnMsg =
                       "==================== vite script injected ====================";
@@ -201,22 +210,7 @@ const rewriteReferer = (
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
   <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>
-  <script type="module">
-    const container = document.getElementById('${
-      userOptions.appContainerId || DEFAULT_ROOT_ID
-    }');
-    if (container instanceof HTMLElement) {
-      import("/${
-        build?.rollupOptions?.input ||
-        userOptions.mainAppSrc ||
-        DEFAULT_MAIN_APP_SRC
-      }").catch(console.error);
-    } else {
-      console.error('Container element not found: ', '${
-        userOptions.appContainerId || DEFAULT_ROOT_ID
-      }');
-    }
-  </script>
+  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/main.js"></script>
 </body>`
                       )
                     );
