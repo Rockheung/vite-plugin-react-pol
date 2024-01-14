@@ -81,13 +81,17 @@ async function reactPageOnLive(
     proxyRes: http.IncomingMessage,
     req: http.IncomingMessage
   ) =>
-    !/text\/html/i.test(proxyRes.headers["content-type"] ?? "") ||
-    !/text\/html/i.test(req.headers.accept ?? "");
+    /text\/html/i.test(proxyRes.headers["content-type"] ?? "") &&
+    /text\/html/i.test(req.headers.accept ?? "");
 
   // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
     name: "live-page-on-live",
     config: async ({ build, server }) => {
+      if (typeof build?.lib !== 'boolean') {
+        console.log(build?.lib?.entry)
+      }
+
       return {
         server: {
           proxy: {
@@ -104,7 +108,7 @@ async function reactPageOnLive(
                 proxy.on(
                   "proxyRes",
                   responseInterceptor(async (responseBuffer, proxyRes, req) => {
-                    if (isDocumentRequest(proxyRes, req)) {
+                    if (!isDocumentRequest(proxyRes, req)) {
                       return responseBuffer;
                     }
 
