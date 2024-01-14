@@ -88,8 +88,17 @@ async function reactPageOnLive(
   return {
     name: "live-page-on-live",
     config: async ({ build, server }) => {
-      if (typeof build?.lib !== 'boolean') {
-        console.log(build?.lib?.entry)
+      const entrySrc =
+        typeof build?.lib == "object" && typeof build?.lib?.entry === "string"
+          ? build?.lib?.entry
+          : null;
+      if (
+        typeof build?.lib !== "object" ||
+        typeof build?.lib?.entry !== "string"
+      ) {
+        console.warn(
+          "You should set `entry` option when you use `build.lib` option."
+        );
       }
 
       return {
@@ -181,8 +190,7 @@ async function reactPageOnLive(
                           return responseBuffer;
                         }
                         const appRoot = document.createElement("div");
-                        appRoot.id =
-                        appId || DEFAULT_ROOT_ID;
+                        appRoot.id = appId || DEFAULT_ROOT_ID;
                         targetNode.parentElement!.insertBefore(
                           appRoot,
                           targetNode.nextSibling
@@ -213,9 +221,11 @@ async function reactPageOnLive(
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>
-  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/src/main.ts"></script>
-</body>`
+  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>{${
+                          entrySrc
+                            ? `<script type="module" src="${scheme}://${devServerHost}:${devServerPort}/${entrySrc}"></script>`
+                            : ""
+                        }</body>`
                       )
                     );
                   })
