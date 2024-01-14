@@ -210,7 +210,7 @@ async function reactPageOnLive(
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
   <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>
-  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/main.js"></script>
+  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/src/main.ts"></script>
 </body>`
                       )
                     );
