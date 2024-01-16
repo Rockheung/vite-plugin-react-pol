@@ -221,7 +221,7 @@ async function reactPageOnLive(
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>{${
+  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>${
                           entrySrc
                             ? `<script type="module" src="${scheme}://${devServerHost}:${devServerPort}/${entrySrc}"></script>`
                             : ""
