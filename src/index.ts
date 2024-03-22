@@ -89,9 +89,9 @@ async function reactPageOnLive(
     name: "live-page-on-live",
     config: async ({ build, server }) => {
       const entrySrc =
-        typeof build?.lib == "object" && typeof build?.lib?.entry === "string"
+        typeof build?.lib === "object" && typeof build?.lib?.entry === "string"
           ? build?.lib?.entry
-          : null;
+          : userOptions.mainAppSrc ?? 'src/main.tsx';
       if (
         typeof build?.lib !== "object" ||
         typeof build?.lib?.entry !== "string"
@@ -209,12 +209,11 @@ async function reactPageOnLive(
                     const devServerPort =
                       userOptions.viteDevServerPort || server?.port || 5173;
 
-                    return (
-                      "<!DOCTYPE html>\n" +
+                    return ("<!DOCTYPE html>\n" +
                       document.documentElement.outerHTML.replace(
                         "</body>",
                         `<script>console.warn('${warnMsg}')</script>
-  <script type="module">  
+  <script type="module">
     import RefreshRuntime from '${scheme}://${devServerHost}:${devServerPort}/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
     window.$RefreshReg$ = () => {}
@@ -224,7 +223,7 @@ async function reactPageOnLive(
   <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>${
                           entrySrc
                             ? `<script type="module" src="${scheme}://${devServerHost}:${devServerPort}/${entrySrc}"></script>`
-                            : ""
+                            : ''
                         }</body>`
                       )
                     );

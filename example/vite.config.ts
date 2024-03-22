@@ -7,9 +7,14 @@ export default defineConfig({
   plugins: [
     react(),
     reactPageOnLive({
-      livePageOrigin: 'https://imtest.me',
-      ignorePathRegex: ".*\\.cm\\??",
-      removeTargetSelectors: 'body'
+      livePageOrigin: 'https://www.google.com',
+      forceMount: true,
+      appContainerId: 'root'
     }),
   ],
+  build: {
+    lib: {
+      entry: "src/main.tsx",
+    }
+  }
 });
