@@ -1,6 +1,5 @@
-# Example for deployed live server side rendering development with Vite + React
+# Vite Plugin React Page On Live
 
-Please place your own certificate, generated with mkcert or something similar, in this location
+Vite Plugin for mount spa on live page. This plugin insert vite development script into document body and mount entry file.
 
-./certs/localhost.pem
-./certs/localhost-key.pem
+See example for now.

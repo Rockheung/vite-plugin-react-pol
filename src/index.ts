@@ -34,6 +34,10 @@ const DEFAULT_ROOT_ID = "root";
 async function reactPageOnLive(
   userOptions: ReactPageOnLiveOptions
 ): Promise<Plugin> {
+  const { protocol: protocolTarget, host: hostTarget } = new URL(
+    userOptions.livePageOrigin
+  );
+
   const ignoreProxyPaths = [
     "node_modules", // node_modules/vite/dist/client/env.mjs
     "@vite", // HMR stuff
@@ -49,11 +53,9 @@ async function reactPageOnLive(
     proxyReq: http.ClientRequest,
     req: http.IncomingMessage
   ) => {
-    if (typeof req.headers.referer === "undefined") return;
+    // ignore request without referer
+    if (typeof req.headers.referer !== 'string') return;
     const { protocol, host } = new URL(req.headers.referer);
-    const { protocol: protocolTarget, host: hostTarget } = new URL(
-      userOptions.livePageOrigin
-    );
     proxyReq.setHeader(
       "referer",
       req.headers.referer
@@ -107,19 +109,34 @@ async function reactPageOnLive(
             [`^${ignoreProxyPaths}.*`]: {
               target: userOptions.livePageOrigin,
               changeOrigin: true,
-              cookieDomainRewrite: {
-                "*": "",
-              },
+              // Not work properly
+              // secure: false,
+              // cookieDomainRewrite: "",
               selfHandleResponse: true,
               configure: (proxy, options) => {
                 proxy.on("proxyReq", rewriteReferer);
                 proxy.on("proxyReq", overrideHeaders);
                 proxy.on(
                   "proxyRes",
-                  responseInterceptor(async (responseBuffer, proxyRes, req) => {
+                  responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+                    if (typeof req.headers.origin !== "string") {
+                      return responseBuffer;
+                    }
+
                     if (!isDocumentRequest(proxyRes, req)) {
                       return responseBuffer;
                     }
+
+                    // if not https, remove secure flag, rewrite domain for cookie based session
+                    const { host } = new URL(req.headers.origin);
+                    res.setHeader(
+                      "set-cookie",
+                      (proxyRes.headers["set-cookie"] ?? []).map((cookie) =>
+                        cookie
+                          .replace(hostTarget, host)
+                          .replace(/ Secure[^;]*;/i, "")
+                      )
+                    );
 
                     if (
                       typeof userOptions.ignorePathRegex !== "undefined" &&
