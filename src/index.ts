@@ -144,8 +144,6 @@ async function reactPageOnLive(
                       return responseBuffer;
                     }
 
-                    const scheme = server?.https ? "https" : "http";
-
                     const {
                       window: { document },
                     } = new JSDOM(responseBuffer, {
@@ -215,29 +213,21 @@ async function reactPageOnLive(
 
                     const warnMsg =
                       "==================== vite script injected ====================";
-                    const devServerHost =
-                      userOptions.viteDevServerHost ||
-                      // based on vite server option
-                      server?.host === true
-                        ? "0.0.0.0"
-                        : server?.host || "localhost";
-                    const devServerPort =
-                      userOptions.viteDevServerPort || server?.port || 5173;
 
                     return ("<!DOCTYPE html>\n" +
                       document.documentElement.outerHTML.replace(
                         "</body>",
                         `<script>console.warn('${warnMsg}')</script>
   <script type="module">
-    import RefreshRuntime from '${scheme}://${devServerHost}:${devServerPort}/@react-refresh'
+    import RefreshRuntime from '/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
     window.$RefreshReg$ = () => {}
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="${scheme}://${devServerHost}:${devServerPort}/@vite/client"></script>${
+  <script type="module" src="/@vite/client"></script>${
                           entrySrc
-                            ? `<script type="module" src="${scheme}://${devServerHost}:${devServerPort}/${entrySrc}"></script>`
+                            ? `<script type="module" src="/${entrySrc}"></script>`
                             : ''
                         }</body>`
                       )
