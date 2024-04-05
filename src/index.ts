@@ -119,24 +119,22 @@ async function reactPageOnLive(
                 proxy.on(
                   "proxyRes",
                   responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
-                    if (typeof req.headers.origin !== "string") {
-                      return responseBuffer;
+                    if (typeof req.headers.origin === "string" && res.getHeader('set-cookie') !== undefined) {
+                      // if not https, remove secure flag, rewrite domain for cookie based session
+                      const { host } = new URL(req.headers.origin);
+                      res.setHeader(
+                        "set-cookie",
+                        (proxyRes.headers["set-cookie"] ?? []).map((cookie) =>
+                          cookie
+                            .replace(hostTarget, host)
+                            .replace(/ Secure[^;]*;/i, "")
+                        )
+                      );
                     }
 
                     if (!isDocumentRequest(proxyRes, req)) {
                       return responseBuffer;
                     }
-
-                    // if not https, remove secure flag, rewrite domain for cookie based session
-                    const { host } = new URL(req.headers.origin);
-                    res.setHeader(
-                      "set-cookie",
-                      (proxyRes.headers["set-cookie"] ?? []).map((cookie) =>
-                        cookie
-                          .replace(hostTarget, host)
-                          .replace(/ Secure[^;]*;/i, "")
-                      )
-                    );
 
                     if (
                       typeof userOptions.ignorePathRegex !== "undefined" &&
