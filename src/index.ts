@@ -3,6 +3,9 @@ import fs from "node:fs/promises";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
 import http from "node:http";
+import Debug from "debug";
+
+const debug = Debug("*");
 
 interface ReactPageOnLiveOptions {
   // Target page to inject React app
@@ -27,6 +30,8 @@ interface ReactPageOnLiveOptions {
   removeTargetSelectors?: string;
   // Override header
   headersOverridden?: Record<string, string>;
+  // debug mode
+  debug?: boolean;
 }
 
 const DEFAULT_ROOT_ID = "root";
@@ -34,6 +39,11 @@ const DEFAULT_ROOT_ID = "root";
 async function reactPageOnLive(
   userOptions: ReactPageOnLiveOptions
 ): Promise<Plugin> {
+  if (userOptions.debug === true) {
+    Debug.enable("*");
+  }
+  debug("Debug enabled");
+
   const { protocol: protocolTarget, host: hostTarget } = new URL(
     userOptions.livePageOrigin
   );
@@ -54,14 +64,12 @@ async function reactPageOnLive(
     req: http.IncomingMessage
   ) => {
     // ignore request without referer
-    if (typeof req.headers.referer !== 'string') return;
-    const { protocol, host } = new URL(req.headers.referer);
-    proxyReq.setHeader(
-      "referer",
-      req.headers.referer
-        .replace(protocol, protocolTarget)
-        .replace(host, hostTarget)
-    );
+    if (typeof req.headers.referer !== "string") return;
+    const refererUrl = new URL(req.headers.referer);
+    refererUrl.protocol = protocolTarget;
+    refererUrl.host = hostTarget;
+    debug(`Rewrite referer: ${req.headers.referer} -> ${refererUrl.href}`);
+    proxyReq.setHeader("referer", refererUrl.href);
   };
 
   const overrideHeaders = (proxyReq: http.ClientRequest) => {
@@ -69,9 +77,14 @@ async function reactPageOnLive(
       for (const [key, value] of Object.entries(
         userOptions.headersOverridden
       )) {
+        debug(`Override header: ${key} -> ${value}`);
         proxyReq.setHeader(key, value);
       }
     }
+  };
+
+  const isHostAddressIp = (host: string) => {
+    return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(host);
   };
 
   // INFO: Accept header for document request per browser
@@ -82,9 +95,47 @@ async function reactPageOnLive(
   const isDocumentRequest = (
     proxyRes: http.IncomingMessage,
     req: http.IncomingMessage
-  ) =>
-    /text\/html/i.test(proxyRes.headers["content-type"] ?? "") &&
-    /text\/html/i.test(req.headers.accept ?? "");
+  ) => {
+    debug(`Check document request: ${req.url}`);
+    return (
+      /text\/html/i.test(proxyRes.headers["content-type"] ?? "") &&
+      /text\/html/i.test(req.headers.accept ?? "")
+    );
+  };
+
+  const rewriteCookieDomain = (
+    proxyRes: http.IncomingMessage,
+    req: http.IncomingMessage,
+    res: http.ServerResponse<http.IncomingMessage>
+  ) => {
+    if (
+      typeof req.headers.origin !== "string" ||
+      typeof proxyRes.headers["set-cookie"] === "undefined"
+    ) {
+      return;
+    }
+    const { host } = new URL(req.headers.origin);
+    debug(
+      `Rewrite cookie domain: ${hostTarget} -> ${
+        isHostAddressIp(host) ? "[Deleted]" : host
+      }`
+    );
+    // if not https, remove secure flag, rewrite domain for cookie based session
+    res.setHeader(
+      "set-cookie",
+      (proxyRes.headers["set-cookie"] ?? []).map((cookie) =>
+        cookie
+          .replace(
+            / Domain=[^;]*;/gi,
+            isHostAddressIp(host) ? "" : ` Domain=${host};`
+          )
+          .replace(/ Secure[^;]*;/gi, "")
+          .replace(/ SameSite=None;/gi, "")
+      )
+    );
+
+    debug(`Cookie rewrited: ${res.getHeader("set-cookie")}`);
+  };
 
   // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
@@ -93,7 +144,7 @@ async function reactPageOnLive(
       const entrySrc =
         typeof build?.lib === "object" && typeof build?.lib?.entry === "string"
           ? build?.lib?.entry
-          : userOptions.mainAppSrc ?? 'src/main.tsx';
+          : userOptions.mainAppSrc ?? "src/main.tsx";
       if (
         typeof build?.lib !== "object" ||
         typeof build?.lib?.entry !== "string"
@@ -118,106 +169,100 @@ async function reactPageOnLive(
                 proxy.on("proxyReq", overrideHeaders);
                 proxy.on(
                   "proxyRes",
-                  responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
-                    if (typeof req.headers.origin === "string" && res.getHeader('set-cookie') !== undefined) {
-                      // if not https, remove secure flag, rewrite domain for cookie based session
-                      const { host } = new URL(req.headers.origin);
-                      res.setHeader(
-                        "set-cookie",
-                        (proxyRes.headers["set-cookie"] ?? []).map((cookie) =>
-                          cookie
-                            .replace(hostTarget, host)
-                            .replace(/ Secure[^;]*;/i, "")
-                        )
-                      );
-                    }
+                  responseInterceptor(
+                    async (responseBuffer, proxyRes, req, res) => {
+                      res.setHeader("x-pol-intercepted", "true");
+                      debug(`\nIntercepted: ${req.url}`);
+                      rewriteCookieDomain(proxyRes, req, res);
 
-                    if (!isDocumentRequest(proxyRes, req)) {
-                      return responseBuffer;
-                    }
-
-                    if (
-                      typeof userOptions.ignorePathRegex !== "undefined" &&
-                      typeof req.url === "string" &&
-                      new RegExp(userOptions.ignorePathRegex).test(req.url)
-                    ) {
-                      return responseBuffer;
-                    }
-
-                    const {
-                      window: { document },
-                    } = new JSDOM(responseBuffer, {
-                      url: options.target as string,
-                      referrer: options.target as string,
-                      contentType: "text/html; charset=utf-8" as any,
-                    });
-
-                    const targetNodes =
-                      typeof userOptions.removeTargetSelectors === "string"
-                        ? document.querySelectorAll(
-                            userOptions.removeTargetSelectors
-                          )
-                        : [];
-
-                    for (const dom of targetNodes) {
-                      if (dom) {
-                        dom.remove();
+                      // ignore non-document request
+                      if (!isDocumentRequest(proxyRes, req)) {
+                        return responseBuffer;
                       }
-                    }
-
-                    [
-                      userOptions.appContainerId,
-                      ...(userOptions.appContainerIds ?? []),
-                    ].forEach((appId) => {
-                      const appRootNode = document.getElementById(
-                        appId || DEFAULT_ROOT_ID
-                      );
 
                       if (
-                        (typeof appId === "undefined" ||
-                          appRootNode === null) &&
-                        userOptions.forceMount === true
+                        typeof userOptions.ignorePathRegex !== "undefined" &&
+                        typeof req.url === "string" &&
+                        new RegExp(userOptions.ignorePathRegex).test(req.url)
                       ) {
-                        console.warn(
-                          "You should set `appContainerId` option to inject React app or default is " +
-                            DEFAULT_ROOT_ID
-                        );
-                        console.warn(
-                          "If this message shows multiple times, server's response might be malformed."
-                        );
-                        console.warn(
-                          "This plugin does not support html ajax response."
-                        );
-                        console.warn(
-                          "You may need to manually ignore next ajax path with ignorePathRegex option."
-                        );
-                        console.warn("- " + req.url);
-
-                        const targetNode = document.querySelector(
-                          userOptions.mountNextTo || "body > *:first-child"
-                        );
-                        if (targetNode === null) {
-                          console.log(
-                            "This request does not seem to be html request."
-                          );
-                          return responseBuffer;
-                        }
-                        const appRoot = document.createElement("div");
-                        appRoot.id = appId || DEFAULT_ROOT_ID;
-                        targetNode.parentElement!.insertBefore(
-                          appRoot,
-                          targetNode.nextSibling
-                        );
+                        return responseBuffer;
                       }
-                    });
 
-                    const warnMsg =
-                      "==================== vite script injected ====================";
+                      const {
+                        window: { document },
+                      } = new JSDOM(responseBuffer, {
+                        url: options.target as string,
+                        referrer: options.target as string,
+                        contentType: "text/html; charset=utf-8" as any,
+                      });
 
-                    return ("<!DOCTYPE html>\n" +
-                      document.documentElement.outerHTML.replace(
-                        "</body>",
-                        `<script>console.warn('${warnMsg}')</script>
+                      const gcNodes =
+                        typeof userOptions.removeTargetSelectors === "string"
+                          ? document.querySelectorAll(
+                              userOptions.removeTargetSelectors
+                            )
+                          : [];
+
+                      for (const node of gcNodes) {
+                        if (node) {
+                          node.remove();
+                        }
+                      }
+
+                      [
+                        userOptions.appContainerId,
+                        ...(userOptions.appContainerIds ?? []),
+                      ].forEach((appId) => {
+                        const appRootNode = document.getElementById(
+                          appId ?? DEFAULT_ROOT_ID
+                        );
+
+                        if (
+                          (typeof appId === "undefined" ||
+                            appRootNode === null) &&
+                          userOptions.forceMount === true
+                        ) {
+                          console.warn(
+                            "You should set `appContainerId` option to inject React app or default is " +
+                              DEFAULT_ROOT_ID
+                          );
+                          console.warn(
+                            "If this message shows multiple times, server's response might be malformed."
+                          );
+                          console.warn(
+                            "This plugin does not support html ajax response."
+                          );
+                          console.warn(
+                            "You may need to manually ignore next ajax path with ignorePathRegex option."
+                          );
+                          console.warn("- " + req.url);
+
+                          const targetNode = document.querySelector(
+                            userOptions.mountNextTo ?? "body > *:first-child"
+                          );
+                          if (targetNode === null) {
+                            console.log(
+                              "This request does not seem to be html request."
+                            );
+                            return responseBuffer;
+                          }
+                          const appRoot = document.createElement("div");
+                          appRoot.id = appId ?? DEFAULT_ROOT_ID;
+                          targetNode.parentElement!.insertBefore(
+                            appRoot,
+                            targetNode.nextSibling
+                          );
+                        }
+                      });
+
+                      const warnMsg =
+                        "==================== vite script injected ====================";
+
+                      return (
+                        "<!DOCTYPE html>\n" +
+                        document.documentElement.outerHTML.replace(
+                          "</body>",
+                          `<script>console.warn('${warnMsg}')</script>
   <script type="module">
     import RefreshRuntime from '/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
@@ -226,13 +271,12 @@ async function reactPageOnLive(
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
   <script type="module" src="/@vite/client"></script>${
-                          entrySrc
-                            ? `<script type="module" src="/${entrySrc}"></script>`
-                            : ''
-                        }</body>`
-                      )
-                    );
-                  })
+    entrySrc ? `<script type="module" src="/${entrySrc}"></script>` : ""
+  }</body>`
+                        )
+                      );
+                    }
+                  )
                 );
               },
             },
