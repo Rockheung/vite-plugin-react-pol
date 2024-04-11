@@ -69,6 +69,7 @@ async function reactPageOnLive(
     const refererUrl = new URL(req.headers.referer);
     refererUrl.protocol = protocolTarget;
     refererUrl.host = hostTarget;
+    refererUrl.port = "";
     debug(`Rewrite referer: ${req.headers.referer} -> ${refererUrl.href}`);
     proxyReq.setHeader("referer", refererUrl.href);
   };
