@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import http from "node:http";
 import Debug from "debug";
 
-const debug = Debug("*");
+const debug = Debug("vite-plugin-react-page-on-live");
 
 interface ReactPageOnLiveOptions {
   // Target page to inject React app
@@ -40,7 +40,7 @@ async function reactPageOnLive(
   userOptions: ReactPageOnLiveOptions
 ): Promise<Plugin> {
   if (userOptions.debug === true) {
-    Debug.enable("*");
+    Debug.enable("vite-plugin-react-page-on-live");
   }
   debug("Debug enabled");
 
@@ -59,6 +59,7 @@ async function reactPageOnLive(
   ]
     .map((fileName) => `(?!/${fileName})`)
     .join("");
+
   const rewriteReferer = (
     proxyReq: http.ClientRequest,
     req: http.IncomingMessage
