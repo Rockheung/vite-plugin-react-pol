@@ -111,15 +111,15 @@ async function reactPageOnLive(
     res: http.ServerResponse<http.IncomingMessage>
   ) => {
     if (
-      typeof req.headers.origin !== "string" ||
+      typeof req.headers.host === "undefined" ||
       typeof proxyRes.headers["set-cookie"] === "undefined"
     ) {
       return;
     }
-    const { host } = new URL(req.headers.origin);
+    const { hostname } = new URL(req.headers.host);
     debug(
       `Rewrite cookie domain: ${hostTarget} -> ${
-        isHostAddressIp(host) ? "[Deleted]" : host
+        isHostAddressIp(hostname) ? "[Deleted]" : hostname
       }`
     );
     // if not https, remove secure flag, rewrite domain for cookie based session
@@ -129,7 +129,7 @@ async function reactPageOnLive(
         cookie
           .replace(
             / Domain=[^;]*;/gi,
-            isHostAddressIp(host) ? "" : ` Domain=${host};`
+            isHostAddressIp(hostname) ? "" : ` Domain=${hostname};`
           )
           .replace(/ Secure[^;]*;/gi, "")
           .replace(/ SameSite=None;/gi, "")
