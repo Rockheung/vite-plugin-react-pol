@@ -1,4 +1,4 @@
-import { Plugin } from "vite";
+import { LibraryOptions, Plugin } from "vite";
 import fs from "node:fs/promises";
 import { responseInterceptor } from "http-proxy-middleware";
 import { JSDOM } from "jsdom";
@@ -15,7 +15,7 @@ interface ReactPageOnLiveOptions {
   // Path to main app source
   appContainerIds?: string[];
   // Path to main app source
-  mainAppSrc?: string;
+  mainAppSrc?: string | string[];
   // Path to mount React app
   mountNextTo?: string;
   // Regex to ignore request path
@@ -89,6 +89,10 @@ async function reactPageOnLive(
     return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(host);
   };
 
+  const isFullUrl = (url: string) => {
+    return /^https?:\/\//.test(url);
+  }
+
   // INFO: Accept header for document request per browser
   // Chrome:  text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
   // Firefox: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
@@ -136,25 +140,32 @@ async function reactPageOnLive(
       )
     );
 
-    debug(`Cookie rewrited: ${res.getHeader("set-cookie")}`);
+    debug(`Cookie rewritten: ${res.getHeader("set-cookie")}`);
   };
 
   // TODO: If userOptions.livePageOrigin's scheme is https, use server option with https.
   return {
     name: "live-page-on-live",
     config: async ({ build, server }) => {
-      const entrySrc =
-        typeof build?.lib === "object" && typeof build?.lib?.entry === "string"
-          ? build?.lib?.entry
-          : userOptions.mainAppSrc ?? "src/main.tsx";
-      if (
-        typeof build?.lib !== "object" ||
-        typeof build?.lib?.entry !== "string"
-      ) {
-        console.warn(
-          "You should set `entry` option when you use `build.lib` option."
-        );
+      if (build?.lib === false || typeof build?.lib?.entry === 'undefined') {
+        console.warn("You should set `entry` option when you use `build.lib` option.");
       }
+      const entriesConfig: LibraryOptions["entry"] =
+        (build?.lib || {})?.entry || (userOptions.mainAppSrc ?? "src/main.tsx");
+
+      const entriesSources = Array.isArray(entriesConfig)
+        ? entriesConfig
+        : typeof entriesConfig === "string"
+        ? [entriesConfig]
+        : Object.values(entriesConfig);
+      const entriesScripts = entriesSources
+        .map(
+          (entrySrc) =>
+            `<script type="module" src="${
+              isFullUrl(entrySrc) ? entrySrc : `/${entrySrc}`
+            }"></script>`
+        )
+        .join("");
 
       return {
         server: {
@@ -226,7 +237,7 @@ async function reactPageOnLive(
                         ) {
                           console.warn(
                             "You should set `appContainerId` option to inject React app or default is " +
-                              DEFAULT_ROOT_ID
+                              DEFAULT_ROOT_ID + '.'
                           );
                           console.warn(
                             "If this message shows multiple times, server's response might be malformed."
@@ -272,9 +283,9 @@ async function reactPageOnLive(
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
-  <script type="module" src="/@vite/client"></script>${
-    entrySrc ? `<script type="module" src="/${entrySrc}"></script>` : ""
-  }</body>`
+  <script type="module" src="/@vite/client"></script>
+  ${entriesScripts}
+  </body>`
                         )
                       );
                     }
